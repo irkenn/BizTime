@@ -47,7 +47,21 @@ async function addInvoice(req, res, next){
 async function changeInvoice(req, res, next){
     try{
         const { id } = req.params;
-        const { amt } = req.body;
+        const { amt, paid } = req.body;
+        let result;
+
+        /////CURRENTLY HERE!!!!!
+        if(paid == true){
+            result = await db.query('UPDATE invoices SET  amt=$1, paid=$2, paid_date=CURRENT_DATE WHERE id=$3 RETURNING id, comp_code, amt, paid, add_date, paid_date', [amt, paid, id ]);
+        }
+        else if(paid == false){
+            console.log('checkpoint')
+            result = await db.query('UPDATE invoices SET  amt=$1, paid=$2, paid_date=$4 WHERE id=$3 RETURNING id, comp_code, amt, paid, add_date, paid_date', [amt, paid, id, null ]);
+        }
+        console.log('This is result', result.rows)
+        if (result.rows.length == 0){
+            throw new ExpressError(`The invoice id: ${id} didn't match any result`, 404);
+        }
         return res.status(200).json({ invoice : result.rows })
     } catch(error){
         return next(error);

@@ -1,5 +1,6 @@
 const ExpressError = require('../expressError');
 let db = require('../db');
+const slugify = require('slugify');
 const { json } = require('express');
 
 async function showCompanies(req, res, next){
@@ -15,7 +16,17 @@ async function showCompanies(req, res, next){
 async function getByCode(req, res, next){
     /** Retrieves id, name and description from the database, throws an error if there're no results*/
     try{
-        const result = await db.query(`SELECT code, name, description, jsonb_agg(invoices) as invoices FROM companies JOIN invoices ON (code=invoices.comp_code) WHERE companies.code=$1 GROUP BY companies.code`, [req.params.code]);
+        const result = await db.query(`SELECT  
+                                c.code, 
+                                name, 
+                                description, 
+                                jsonb_agg(DISTINCT i) AS invoices, 
+                                jsonb_agg(DISTINCT ind.industry) AS industries 
+                                FROM companies AS c 
+                                JOIN invoices AS i ON (code=i.comp_code)
+                                LEFT JOIN companies_industries AS c_ind ON c.code = c_ind.comp_code
+                                LEFT JOIN industries AS ind ON c_ind.ind_code = ind.code
+                                WHERE c.code = $1 GROUP BY c.code;`, [req.params.code]);
         
         if (result.rows.length == 0){
             throw new ExpressError(`The company code you provided: '${req.params.code}' didn't match any result`, 404);
@@ -30,8 +41,9 @@ async function getByCode(req, res, next){
 
 async function addCompany(req, res, next){
     try{
-        const { code, name, description } = req.body;
-        const result = await db.query('INSERT INTO companies VALUES ($1, $2, $3) RETURNING code, name, description', [code, name, description]);
+        const { name, description } = req.body;
+        let slugcode = slugify(name, {replacement: '-', remove:/[*+~.,%=?!()'"!:@]/g}).toLowerCase();
+        const result = await db.query('INSERT INTO companies VALUES ($1, $2, $3) RETURNING code, name, description', [slugcode, name, description]);
         return res.status(201).json({company: result.rows[0]})
     } catch(error){
         return next(error);
